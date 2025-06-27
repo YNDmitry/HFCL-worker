@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hfcl-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-26",
+
+  "vars": {
+    "WEBFLOW_ORIGIN": "webflow.hfclproxy.com",
+    "WEBFLOW_SITE_ID": "6694e591f11c580bacd73834",
+    "DETAIL_COLLECTION_ID": "66bb899bf9fc61c1ed300308",
+    "FAMILY_COLLECTION_ID": "66bb8c48a867cc5a46889aa3",
+    "OVERVIEW_COLLECTION_ID": "66bb8d0e8b8a6885351ab7a0"
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "PRODUCT_MAP",
+      "id": "f2403f6206064ad89fae965187ecc587",
+      "preview_id": "6d8379d9dd694ad5bbf4d55758fec850"
+    }
+  ],
+
+  "triggers": {"crons": ["0 * * * *"]}
+}
