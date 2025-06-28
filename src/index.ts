@@ -1,4 +1,3 @@
-// src/index.ts — Cloudflare Worker
 export interface Env {
   WEBFLOW_API_TOKEN: string
   DETAIL_COLLECTION_ID: string
@@ -9,11 +8,12 @@ export interface Env {
   HOOK_SECRET: string
 }
 
-const API       = 'https://api.webflow.com/v2'
-const HDR       = (t: string) => ({ Authorization: `Bearer ${t}`, 'accept-version': '1.0.0' })
-const BASE      = '/products'
-const CACHE_TTL = 86_400   // 24 h
-const MEMO_TTL  = 300_000  // 5 min
+const API         = 'https://api.webflow.com/v2'
+const HDR         = (t: string) => ({ Authorization: `Bearer ${t}`, 'accept-version': '1.0.0' })
+const BASE        = '/products'
+const CACHE_TTL   = 86_400   // 24 h
+const MEMO_TTL    = 300_000  // 5 min
+const SITEMAP_RE = /^\/sitemap.*\.xml(?:\.gz)?$/
 
 type Entry = { pretty: string; real: string }
 type Maps  = { detail: Record<string, Entry>; family: Record<string, Entry> }
@@ -24,22 +24,22 @@ let building: Promise<Maps>|null = null
 
 export default <ExportedHandler<Env>>{
   async fetch(req, env, ctx) {
-    const url      = new URL(req.url)
-    const path     = url.pathname
-    const abs      = (p: string) => `https://${env.WEBFLOW_ORIGIN}${p}`
-    const edge     = caches.default
+    const url  = new URL(req.url)
+    const path = url.pathname
+    const abs  = (p: string) => `https://${env.WEBFLOW_ORIGIN}${p}`
+    const edge = caches.default
 
-    // ───────── rebuild endpoint ─────────
     if (path === '/__rebuild' && (req.method === 'POST' || req.method === 'GET')) {
       const urlKey = url.searchParams.get('key')
-      const ok     = urlKey === env.HOOK_SECRET ||
-                     (req.method === 'POST' && await verifyWebhook(req, env.HOOK_SECRET))
+      const ok = urlKey === env.HOOK_SECRET ||
+                 (req.method === 'POST' && await verifyWebhook(req, env.HOOK_SECRET))
       if (!ok) return new Response('Forbidden', { status: 403 })
       ctx.waitUntil(rebuildMaps(env))
       return new Response(null, { status: 204 })
     }
 
-    // ───────── redirects старых url ─────────
+    if (SITEMAP_RE.test(path)) return rewriteSitemap(req, abs(path), env, ctx)
+
     const mDetail = path.match(/^\/products\/detail\/([^/]+)$/)
     if (mDetail) {
       const hit = (await getMaps(env)).detail[mDetail[1]]
@@ -51,11 +51,9 @@ export default <ExportedHandler<Env>>{
       if (hit) return Response.redirect(abs(hit.pretty), 301)
     }
 
-    // ───────── overview ─────────
     if (/^\/products\/overview\/.+/.test(path))
       return proxyAndCache(req, abs(path), ctx)
 
-    // ───────── product pages ─────────
     if (path.startsWith('/products/')) {
       const cached = await edge.match(req)
       if (cached) return cached
@@ -77,7 +75,6 @@ export const scheduled: ExportedHandlerScheduledHandler<Env> = async (_e, env) =
 
 /*──────── helpers ────────*/
 
-// constant-time compare
 const safeEq = (a: string, b: string) => {
   if (a.length !== b.length) return false
   let diff = 0
@@ -85,7 +82,6 @@ const safeEq = (a: string, b: string) => {
   return diff === 0
 }
 
-// HMAC-SHA256 verify
 async function verifyWebhook(req: Request, secret: string) {
   const ts  = req.headers.get('x-webflow-timestamp') ?? ''
   const sig = req.headers.get('x-webflow-signature') ?? ''
@@ -102,7 +98,7 @@ async function verifyWebhook(req: Request, secret: string) {
   return safeEq(calc, sig)
 }
 
-const slugOf = (i: any) => (i.slug ?? i.fieldData?.slug ?? '').trim()
+const slugOf = (i: any) => (i.slug?.trim() || i.fieldData?.slug?.trim() || '')
 
 async function getMaps(env: Env): Promise<Maps> {
   if (memo && Date.now() - memoAt < MEMO_TTL) return memo
@@ -111,7 +107,6 @@ async function getMaps(env: Env): Promise<Maps> {
   return rebuildMaps(env)
 }
 
-// force rebuild + retry lookup (устраняет 404 после manual flush или deploy)
 async function findHit(env: Env, slug: string): Promise<Entry | null> {
   let maps = await getMaps(env)
   let hit  = maps.detail[slug] ?? maps.family[slug]
@@ -193,10 +188,48 @@ async function proxyAndCache(req: Request, url: string, ctx: ExecutionContext) {
   )
 
   if (req.method === 'GET' && resp.ok) {
-    ctx.waitUntil(
-      caches.default.put(req, resp.clone()).catch(() => {})
-    )
+    ctx.waitUntil(caches.default.put(req, resp.clone()).catch(() => {}))
   }
 
+  return resp
+}
+
+async function rewriteSitemap(
+  req: Request,
+  url: string,
+  env: Env,
+  ctx: ExecutionContext
+) {
+  const edge     = caches.default
+  const cacheKey = new Request(req.url, req)
+
+  if (req.headers.get('Cache-Control') !== 'no-cache') {
+    const hit = await edge.match(cacheKey)
+    if (hit) return hit
+  }
+
+  const upstream = await fetch(url, { cf: { cacheTtl: 0 } })
+  let   xml      = await upstream.text()
+  const maps     = await getMaps(env)
+
+  const apply = (kind: 'detail' | 'family', map: Record<string, Entry>) => {
+    const re = new RegExp(`https://[^<"]+/products/${kind}/([^<"]+)`, 'g')
+    xml = xml.replace(re, (_m, slug) => {
+      const hit = map[slug as string]
+      return hit ? `https://${env.WEBFLOW_ORIGIN}${hit.pretty}` : _m
+    })
+  }
+
+  apply('detail', maps.detail)
+  apply('family', maps.family)
+
+  const resp = new Response(xml, {
+    headers: {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': `public, s-maxage=${CACHE_TTL}, stale-while-revalidate=31536000`,
+    },
+  })
+
+  ctx.waitUntil(edge.put(cacheKey, resp.clone()).catch(() => {}))
   return resp
 }

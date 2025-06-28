@@ -41,9 +41,9 @@ KV PRODUCT_MAP (detail & family slug → pretty/real)
 ## Rebuild mechanics
 
 1. **Triggered by**
-   * `/__rebuild?key=HOOK_SECRET` (GET)
+   * `/__rebuild` (GET)
    * Valid Webflow webhook (POST, HMAC-SHA256 verified)
-   * Scheduled Worker (default cron in `wrangler.toml`)
+   * Scheduled Worker (default cron in `wrangler.jsonc`)
 2. Fetch all items from overview, family, detail collections (100 × N).
 3. Build two lookup tables:
    * `family[slug]  → {pretty, real}`
@@ -84,7 +84,7 @@ wrangler kv namespace create PRODUCT_MAP --preview
 # Run
 wrangler dev --remote
 ```
-`Tip: hit http://localhost:8787/__rebuild?key=$HOOK_SECRET after first start to prime maps.`
+`Tip: hit http://localhost:8787/__rebuild after first start to prime maps.`
 
 ## Deployment
 
