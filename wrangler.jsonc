@@ -5,20 +5,29 @@
   "compatibility_date": "2025-06-26",
 
   "vars": {
+  	"WEBFLOW_CMS_API": "https://api.webflow.com/v2",
     "WEBFLOW_ORIGIN": "webflow.hfclproxy.com",
     "WEBFLOW_SITE_ID": "6694e591f11c580bacd73834",
     "DETAIL_COLLECTION_ID": "66bb899bf9fc61c1ed300308",
     "FAMILY_COLLECTION_ID": "66bb8c48a867cc5a46889aa3",
-    "OVERVIEW_COLLECTION_ID": "66bb8d0e8b8a6885351ab7a0"
+    "OVERVIEW_COLLECTION_ID": "66bb8d0e8b8a6885351ab7a0",
+    "INVESTORS_COLLECTION_ID": "673d2534063e813b754ae68c",
+    "INVESTORS_COLLECTION_ITEM_ID": "673d25566ed417c53f738e0c",
+    "BASE_PATH": "/products",
+    "CF_ZONE_ID": "eec59070dd8c0061137de8421a941b7a"
   },
 
   "kv_namespaces": [
     {
       "binding": "PRODUCT_MAP",
       "id": "f2403f6206064ad89fae965187ecc587",
-      "preview_id": "6d8379d9dd694ad5bbf4d55758fec850"
+      "preview_id": "ce6296c2fe22445f9831dc333066cb7b"
     }
   ],
 
-  "triggers": {"crons": ["0 * * * *"]}
+  "observability": {
+  	"logs": {"enabled": true}
+  },
+
+  "triggers": {"crons": ["0 0 * * *", "*/15 * * * *"]}
 }

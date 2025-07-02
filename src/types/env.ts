@@ -1,0 +1,16 @@
+export interface Env {
+	BASE_PATH: string
+	WEBFLOW_CMS_API: string
+	WEBFLOW_API_TOKEN: string
+	WEBFLOW_SITE_ID: string
+	DETAIL_COLLECTION_ID: string
+	FAMILY_COLLECTION_ID: string
+	OVERVIEW_COLLECTION_ID: string
+	INVESTORS_COLLECTION_ID: string
+	INVESTORS_COLLECTION_ITEM_ID: string
+	WEBFLOW_ORIGIN: string
+	PRODUCT_MAP: KVNamespace
+	HOOK_SECRET: string
+	CF_ZONE_ID: string
+	CF_API_TOKEN: string
+}
